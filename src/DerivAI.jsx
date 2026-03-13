@@ -13,9 +13,9 @@ const EXAMPLES = [
 ];
 
 const TYPE_CONFIG = {
-  hedge: { label: "Hedge / Protection", bg: "#eef4fd", color: "#1a5fb4", emoji: "🛡" },
-  profit: { label: "Directional Profit", bg: "#edf9f2", color: "#1a7a4a", emoji: "🚀" },
-  neutral: { label: "Neutral / Income", bg: "#fff3e0", color: "#c05c00", emoji: "⚖️" },
+  hedge:   { label: "Hedge / Protection",  bg: "#eef4fd", color: "#1a5fb4", emoji: "🛡" },
+  profit:  { label: "Directional Profit",  bg: "#edf9f2", color: "#1a7a4a", emoji: "🚀" },
+  neutral: { label: "Neutral / Income",    bg: "#fff3e0", color: "#c05c00", emoji: "⚖️" },
 };
 
 async function callGemini(messages, system) {
@@ -27,12 +27,12 @@ async function callGemini(messages, system) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: "Bearer " + API_KEY,
+      "Authorization": "Bearer " + API_KEY
     },
     body: JSON.stringify({
       model: "llama-3.3-70b-versatile",
       max_tokens: 4000,
-      messages: groqMessages,
+      messages: groqMessages
     }),
   });
 
@@ -43,7 +43,7 @@ async function callGemini(messages, system) {
 
 function extractJSON(text) {
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("No JSON found");
+  if (!match) throw new Error("No JSON found in response");
   return JSON.parse(match[0]);
 }
 
@@ -60,6 +60,8 @@ export default function DerivAI() {
 
   const chatRef = useRef(null);
 
+  /* MOBILE DETECTION */
+
   const [isMobile, setIsMobile] = useState(window.innerWidth < 900);
 
   useEffect(() => {
@@ -75,24 +77,20 @@ export default function DerivAI() {
 
   async function generate() {
 
-    if (!query.trim() || loading) return;
+    if (!query.trim()) return;
 
     setLoading(true);
-
-    // CLEAR OLD DATA
     setError("");
     setResult(null);
     setChatMsgs([]);
-    setChatInput("");
-
-    if (chatRef.current) chatRef.current.scrollTop = 0;
 
     const systemPrompt =
-      "You are an expert Indian NSE derivatives trader. Return only JSON.";
+      "You are an expert Indian NSE derivatives trader. Return ONLY JSON.";
 
     const userPrompt = `User wants to trade: "${query}"`;
 
     try {
+
       const text = await callGemini(
         [{ role: "user", content: userPrompt }],
         systemPrompt
@@ -105,13 +103,9 @@ export default function DerivAI() {
       setChatMsgs([
         {
           role: "ai",
-          text: `Strategy ready for ${data?.parsed?.instrument || ""}. Ask anything.`,
-        },
+          text: `Strategy ready for ${data.parsed.instrument}. Ask anything.`
+        }
       ]);
-
-      setQuery("");
-
-      window.scrollTo({ top: 0, behavior: "smooth" });
 
     } catch (e) {
       setError(e.message);
@@ -128,21 +122,22 @@ export default function DerivAI() {
 
     setChatInput("");
 
-    setChatMsgs((prev) => [
+    setChatMsgs(prev => [
       ...prev,
       { role: "user", text: msg },
-      { role: "ai", text: "..." },
+      { role: "ai", text: "..." }
     ]);
 
     setChatLoading(true);
 
     try {
+
       const reply = await callGemini(
         [{ role: "user", content: msg }],
-        "Explain options trading simply for beginners."
+        "Explain options trading simply."
       );
 
-      setChatMsgs((prev) => {
+      setChatMsgs(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: "ai", text: reply };
         return updated;
@@ -150,12 +145,9 @@ export default function DerivAI() {
 
     } catch (e) {
 
-      setChatMsgs((prev) => {
+      setChatMsgs(prev => {
         const updated = [...prev];
-        updated[updated.length - 1] = {
-          role: "ai",
-          text: "Error: " + e.message,
-        };
+        updated[updated.length - 1] = { role: "ai", text: "Error: " + e.message };
         return updated;
       });
 
@@ -164,105 +156,111 @@ export default function DerivAI() {
     setChatLoading(false);
   }
 
+  const p = result?.parsed;
+
   const S = {
+
     shell: {
       display: "grid",
       gridTemplateColumns: isMobile ? "1fr" : "320px 1fr",
       minHeight: "100vh",
-      fontFamily: "Segoe UI",
+      fontFamily: "'Segoe UI','DM Sans',sans-serif",
+      fontSize: 14
     },
 
     left: {
       background: "#0f0e17",
       color: "#fff",
-      padding: 24,
+      display: "flex",
+      flexDirection: "column",
+      padding: "28px 24px",
+      position: isMobile ? "relative" : "sticky",
+      top: 0,
       height: isMobile ? "auto" : "100vh",
+      overflowY: "auto"
     },
 
     right: {
       background: "#faf9f7",
-      padding: 30,
+      padding: "28px 36px"
     },
 
     textarea: {
       width: "100%",
-      padding: 12,
-      fontSize: 18,
-      borderRadius: 8,
+      background: "rgba(255,255,255,0.07)",
+      border: "1px solid rgba(255,255,255,0.14)",
+      borderRadius: 10,
+      color: "#fff",
+      fontSize: 20,
+      fontWeight: 700,
+      padding: "14px 16px"
     },
 
-    button: {
+    goldBtn: {
       width: "100%",
-      padding: 12,
-      marginTop: 12,
-      fontWeight: "bold",
+      padding: 13,
       background: "#c9a84c",
       border: "none",
-      borderRadius: 8,
-      cursor: "pointer",
-    },
-
-    card: {
-      background: "#fff",
-      padding: 20,
       borderRadius: 10,
-      border: "1px solid #eee",
-      marginBottom: 20,
+      fontWeight: 800,
+      cursor: "pointer"
     },
 
     metricGrid: {
       display: "grid",
       gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)",
       gap: 10,
-      marginBottom: 20,
+      marginBottom: 18
     },
 
-    chatBox: {
-      border: "1px solid #ddd",
-      borderRadius: 10,
-      overflow: "hidden",
-    },
+    card: {
+      background: "#fff",
+      border: "1px solid #e8e6f0",
+      borderRadius: 12,
+      marginBottom: 14,
+      padding: 16
+    }
   };
 
   return (
+
     <div style={S.shell}>
 
-      {/* LEFT PANEL */}
+      {/* LEFT SIDEBAR */}
 
-      <div style={S.left}>
+      <aside style={S.left}>
 
         <h2>DerivAI</h2>
 
         <textarea
           style={S.textarea}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={e => setQuery(e.target.value)}
           placeholder="Bank Nifty 10000 rupees"
         />
 
         <button
-          style={S.button}
           onClick={generate}
           disabled={loading || !query.trim()}
+          style={S.goldBtn}
         >
           {loading ? "Analyzing..." : "Generate Strategy"}
         </button>
 
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 14 }}>
 
-          {EXAMPLES.map((ex) => (
+          {EXAMPLES.map(ex => (
             <button
               key={ex}
               onClick={() => setQuery(ex)}
               style={{
                 margin: 4,
-                padding: 6,
-                fontSize: 12,
+                padding: "6px 10px",
                 borderRadius: 20,
-                border: "1px solid #666",
+                border: "1px solid #555",
                 background: "transparent",
                 color: "#fff",
-                cursor: "pointer",
+                fontSize: 12
               }}
             >
               {ex}
@@ -271,14 +269,14 @@ export default function DerivAI() {
 
         </div>
 
-      </div>
+      </aside>
 
       {/* RIGHT PANEL */}
 
-      <div style={S.right}>
+      <main style={S.right}>
 
         {!result && !loading && (
-          <h3>Enter an instrument and capital to generate a strategy</h3>
+          <h3>Enter an instrument to generate strategies</h3>
         )}
 
         {loading && <h3>Building strategy...</h3>}
@@ -286,17 +284,18 @@ export default function DerivAI() {
         {error && <div>Error: {error}</div>}
 
         {result && (
-          <>
 
+          <>
             <div style={S.metricGrid}>
+
               <div style={S.card}>
                 <b>Instrument</b>
-                <div>{result?.parsed?.instrument}</div>
+                <div>{p.instrument}</div>
               </div>
 
               <div style={S.card}>
                 <b>Capital</b>
-                <div>{result?.parsed?.capitalFormatted}</div>
+                <div>{p.capitalFormatted}</div>
               </div>
 
               <div style={S.card}>
@@ -308,6 +307,7 @@ export default function DerivAI() {
                 <b>Resistance</b>
                 <div>{result?.keyLevels?.resistance}</div>
               </div>
+
             </div>
 
             {(result.strategies || []).map((s, i) => {
@@ -315,11 +315,10 @@ export default function DerivAI() {
               const tc = TYPE_CONFIG[s.type] || TYPE_CONFIG.neutral;
 
               return (
+
                 <div key={i} style={S.card}>
 
-                  <h3>
-                    {tc.emoji} {s.name}
-                  </h3>
+                  <h3>{tc.emoji} {s.name}</h3>
 
                   <p>{s.description}</p>
 
@@ -345,73 +344,19 @@ export default function DerivAI() {
                     </tbody>
                   </table>
 
-                  <p>
-                    <b>Total Cost:</b> {s.totalCost}
-                  </p>
-
-                  <p>
-                    <b>Max Profit:</b> {s.maxProfit}
-                  </p>
-
-                  <p>
-                    <b>Max Loss:</b> {s.maxLoss}
-                  </p>
-
                 </div>
+
               );
+
             })}
 
-            {/* CHAT */}
-
-            <div style={S.chatBox}>
-
-              <div
-                ref={chatRef}
-                style={{
-                  maxHeight: 250,
-                  overflowY: "auto",
-                  padding: 10,
-                }}
-              >
-
-                {chatMsgs.map((m, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      textAlign: m.role === "user" ? "right" : "left",
-                      marginBottom: 8,
-                    }}
-                  >
-                    {m.text}
-                  </div>
-                ))}
-
-              </div>
-
-              <div style={{ display: "flex", padding: 10 }}>
-
-                <textarea
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  style={{ flex: 1 }}
-                />
-
-                <button
-                  onClick={sendChat}
-                  disabled={chatLoading || !chatInput.trim()}
-                >
-                  Send
-                </button>
-
-              </div>
-
-            </div>
-
           </>
+
         )}
 
-      </div>
+      </main>
 
     </div>
+
   );
 }
