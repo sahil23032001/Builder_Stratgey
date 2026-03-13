@@ -113,7 +113,7 @@ export default function DerivAI() {
 
     setLoading(false);
   }
-
+  // eslint-disable-next-line no-unused-vars
   async function sendChat() {
 
     if (!chatInput.trim() || chatLoading) return;
