@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 
-const API = "https://api.groq.com/openai/v1/chat/completions";
-const API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+const API = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+
 
 const EXAMPLES = [
   "Bank Nifty 10000 rupees",
@@ -18,26 +19,22 @@ const TYPE_CONFIG = {
   neutral: { label: "Neutral / Income",    bg: "#fff3e0", color: "#c05c00", emoji: "⚖️" },
 };
 
-async function callGroq(messages, system) {
-  const groqMessages = [];
-  if (system) groqMessages.push({ role: "system", content: system });
-  groqMessages.push(...messages);
+async function callGemini(messages, system) {
+  const parts = [];
+  if (system) parts.push({ text: "SYSTEM: " + system + "\n\n" });
+  messages.forEach(m => parts.push({ text: (m.role === "user" ? "USER: " : "ASSISTANT: ") + m.content }));
 
   const res = await fetch(API, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${API_KEY}`
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      max_tokens: 4000,
-      messages: groqMessages
+      contents: [{ role: "user", parts }],
+      generationConfig: { maxOutputTokens: 4000, temperature: 0.7 }
     }),
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-  return data.choices[0].message.content;
+  return data.candidates[0].content.parts[0].text;
 }
 
 function extractJSON(text) {
@@ -174,7 +171,7 @@ Return this exact JSON structure filled with realistic data for Indian markets:
 Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and costs realistically to fit the user's capital. Use Rs. prefix for money (not the rupee symbol).`;
 
     try {
-      const text = await callGroq(
+      const text = await callGemini(
         [{ role: "user", content: userPrompt }],
         systemPrompt
       );
@@ -198,7 +195,7 @@ Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and cos
     setChatLoading(true);
     try {
       const sys = `Expert Indian derivatives educator. Context: ${result?.parsed?.instrument}, ${result?.parsed?.capitalFormatted}. Plain English, beginner-friendly. Reference NSE, your stockbroker platform, lot sizes, Thursday expiry, SEBI. Under 80 words.`;
-      const reply = await callGroq([{ role: "user", content: msg }], sys);
+      const reply = await callGemini([{ role: "user", content: msg }], sys);
       setChatMsgs(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: "ai", text: reply };
