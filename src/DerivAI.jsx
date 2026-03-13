@@ -183,7 +183,7 @@ export default function DerivAI() {
   }, [chatMsgs]);
 
   // Close drawer when result arrives on mobile
-  useEffect(() => { if (result && isMobile) setDrawerOpen(false); }, [result]);
+  useEffect(() => { if (result && isMobile) setDrawerOpen(false); }, [result, isMobile]);
 
   // Lock body scroll when mobile drawer is open
   useEffect(() => {
