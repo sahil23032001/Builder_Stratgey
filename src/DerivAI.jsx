@@ -3,7 +3,6 @@ import { useState, useRef, useEffect } from "react";
 const API_KEY = process.env.REACT_APP_GROQ_API_KEY;
 const API = "https://api.groq.com/openai/v1/chat/completions";
 
-
 const EXAMPLES = [
   "Bank Nifty 10000 rupees",
   "Nifty 50 with 25000 rupees",
@@ -14,27 +13,19 @@ const EXAMPLES = [
 ];
 
 const TYPE_CONFIG = {
-  hedge:   { label: "Hedge / Protection",  bg: "#eef4fd", color: "#1a5fb4", emoji: "🛡" },
-  profit:  { label: "Directional Profit",  bg: "#edf9f2", color: "#1a7a4a", emoji: "🚀" },
-  neutral: { label: "Neutral / Income",    bg: "#fff3e0", color: "#c05c00", emoji: "⚖️" },
+  hedge:   { label: "Hedge / Protection", bg: "#eef4fd", color: "#1a5fb4", emoji: "🛡" },
+  profit:  { label: "Directional Profit", bg: "#edf9f2", color: "#1a7a4a", emoji: "🚀" },
+  neutral: { label: "Neutral / Income",   bg: "#fff3e0", color: "#c05c00", emoji: "⚖️" },
 };
 
 async function callGemini(messages, system) {
   const groqMessages = [];
   if (system) groqMessages.push({ role: "system", content: system });
   groqMessages.push(...messages);
-
   const res = await fetch(API, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + API_KEY
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      max_tokens: 4000,
-      messages: groqMessages
-    }),
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + API_KEY },
+    body: JSON.stringify({ model: "llama-3.3-70b-versatile", max_tokens: 4000, messages: groqMessages }),
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
@@ -47,6 +38,132 @@ function extractJSON(text) {
   return JSON.parse(match[0]);
 }
 
+/* ─── useBreakpoint hook ──────────────────────────────────── */
+function useBreakpoint() {
+  const [bp, setBp] = useState(() => {
+    if (typeof window === "undefined") return "desktop";
+    const w = window.innerWidth;
+    if (w < 640) return "mobile";
+    if (w < 1024) return "tablet";
+    return "desktop";
+  });
+  useEffect(() => {
+    const handler = () => {
+      const w = window.innerWidth;
+      setBp(w < 640 ? "mobile" : w < 1024 ? "tablet" : "desktop");
+    };
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return bp;
+}
+
+/* ─── InputPanel ─────────────────────────────────────────── */
+function InputPanel({ query, setQuery, generate, loading, result, onClose, bp }) {
+  const p = result?.parsed;
+  return (
+    <div style={{
+      background: "#0f0e17",
+      color: "#fff",
+      display: "flex",
+      flexDirection: "column",
+      padding: bp === "mobile" ? "20px 18px 24px" : "28px 24px",
+      height: bp === "mobile" ? "auto" : "100%",
+      overflowY: "auto",
+      boxSizing: "border-box",
+      gap: 0,
+    }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
+        <div>
+          <div style={{ fontSize: bp === "mobile" ? 22 : 26, fontWeight: 800, letterSpacing: "-0.5px" }}>
+            Deriv<span style={{ color: "#c9a84c", fontStyle: "italic" }}>AI</span>
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginTop: 3 }}>
+            Indian Derivatives Strategy Builder
+          </div>
+        </div>
+        {bp === "mobile" && onClose && (
+          <button onClick={onClose} style={{
+            background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 8,
+            color: "#fff", fontSize: 18, width: 36, height: 36, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}>✕</button>
+        )}
+      </div>
+
+      {/* Label */}
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: "rgba(255,255,255,0.38)", marginBottom: 8 }}>
+        What do you want to trade?
+      </div>
+
+      {/* Textarea */}
+      <textarea
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); generate(); } }}
+        placeholder="e.g. Bank Nifty 10000 rupees"
+        rows={3}
+        style={{
+          width: "100%", boxSizing: "border-box",
+          background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.14)",
+          borderRadius: 10, color: "#fff", fontSize: bp === "mobile" ? 17 : 20,
+          fontWeight: 700, padding: "14px 16px", outline: "none", resize: "none",
+          lineHeight: 1.4, fontFamily: "inherit",
+        }}
+      />
+
+      {/* Example chips */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0 18px" }}>
+        {EXAMPLES.map(ex => (
+          <button key={ex} onClick={() => setQuery(ex)} style={{
+            background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 20, padding: "5px 11px", fontSize: 11,
+            color: "rgba(255,255,255,0.55)", cursor: "pointer", fontFamily: "inherit",
+          }}>
+            {ex.replace(" rupees", "").replace("with ", "")}
+          </button>
+        ))}
+      </div>
+
+      {/* Generate button */}
+      <button
+        onClick={generate}
+        disabled={loading || !query.trim()}
+        style={{
+          width: "100%", padding: 13, background: "#c9a84c", color: "#0f0e17",
+          border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14,
+          cursor: (loading || !query.trim()) ? "not-allowed" : "pointer",
+          opacity: (loading || !query.trim()) ? 0.45 : 1, fontFamily: "inherit",
+        }}
+      >
+        {loading ? "⏳ Analyzing..." : "⚡ Generate Strategy"}
+      </button>
+
+      {/* Parsed summary */}
+      {p && (
+        <div style={{
+          marginTop: 18, background: "rgba(201,168,76,0.1)",
+          border: "1px solid rgba(201,168,76,0.28)", borderRadius: 10, padding: "12px 14px",
+        }}>
+          {[["Instrument", p.instrument], ["Capital", p.capitalFormatted], ["Type", p.type], ["Exchange", p.exchange]].map(([k, v]) => (
+            <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12 }}>
+              <span style={{ color: "rgba(255,255,255,0.42)" }}>{k}</span>
+              <span style={{ color: "#c9a84c", fontWeight: 700 }}>{v}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Disclaimer */}
+      <div style={{ marginTop: "auto", paddingTop: 20, fontSize: 10, color: "rgba(255,255,255,0.24)", lineHeight: 1.6 }}>
+        ⚠️ Educational only. Not SEBI-registered advice. Options carry substantial risk. Consult a licensed advisor.
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main export ─────────────────────────────────────────── */
 export default function DerivAI() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -55,18 +172,28 @@ export default function DerivAI() {
   const [chatMsgs, setChatMsgs] = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const chatRef = useRef(null);
+  const bp = useBreakpoint();
+  const isMobile = bp === "mobile";
+  const isTablet = bp === "tablet";
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [chatMsgs]);
 
+  // Close drawer when result arrives on mobile
+  useEffect(() => { if (result && isMobile) setDrawerOpen(false); }, [result]);
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (isMobile) document.body.style.overflow = drawerOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [drawerOpen, isMobile]);
+
   async function generate() {
     if (!query.trim()) return;
-    setLoading(true);
-    setError("");
-    setResult(null);
-    setChatMsgs([]);
+    setLoading(true); setError(""); setResult(null); setChatMsgs([]);
 
     const systemPrompt = `You are an expert Indian NSE derivatives trader and educator. 
 Return ONLY a raw JSON object. No markdown. No code fences. No explanation before or after.
@@ -84,83 +211,35 @@ Return this exact JSON structure filled with realistic data for Indian markets:
     "type": "Index Options"
   },
   "marketContext": "One sentence about current market conditions for this instrument.",
-  "keyLevels": {
-    "support": "47800",
-    "resistance": "49200"
-  },
+  "keyLevels": { "support": "47800", "resistance": "49200" },
   "strategies": [
     {
-      "name": "Bull Call Spread",
-      "type": "hedge",
-      "icon": "shield",
+      "name": "Bull Call Spread", "type": "hedge", "icon": "shield",
       "description": "Two sentences explaining this strategy simply for a beginner.",
       "legs": [
-        {
-          "action": "BUY",
-          "instrument": "BANKNIFTY 48500 CE 27-Mar",
-          "qty": "1 lot (15 units)",
-          "approxPremium": "Rs.3000 total",
-          "purpose": "Main profit leg if index rises above 48500"
-        },
-        {
-          "action": "SELL",
-          "instrument": "BANKNIFTY 49000 CE 27-Mar",
-          "qty": "1 lot (15 units)",
-          "approxPremium": "Rs.1500 credit",
-          "purpose": "Reduces total cost of the trade"
-        }
+        { "action": "BUY", "instrument": "BANKNIFTY 48500 CE 27-Mar", "qty": "1 lot (15 units)", "approxPremium": "Rs.3000 total", "purpose": "Main profit leg if index rises above 48500" },
+        { "action": "SELL", "instrument": "BANKNIFTY 49000 CE 27-Mar", "qty": "1 lot (15 units)", "approxPremium": "Rs.1500 credit", "purpose": "Reduces total cost of the trade" }
       ],
-      "totalCost": "Rs.1500",
-      "maxProfit": "Rs.6000",
-      "maxLoss": "Rs.1500",
-      "breakeven": "48600",
+      "totalCost": "Rs.1500", "maxProfit": "Rs.6000", "maxLoss": "Rs.1500", "breakeven": "48600",
       "beginnerTip": "One practical sentence for placing this trade with your stockbroker."
     },
     {
-      "name": "Long Put",
-      "type": "profit",
-      "icon": "rocket",
+      "name": "Long Put", "type": "profit", "icon": "rocket",
       "description": "Two sentences explaining this strategy.",
       "legs": [
-        {
-          "action": "BUY",
-          "instrument": "BANKNIFTY 48000 PE 27-Mar",
-          "qty": "1 lot (15 units)",
-          "approxPremium": "Rs.2700 total",
-          "purpose": "Profits if index falls below 48000"
-        }
+        { "action": "BUY", "instrument": "BANKNIFTY 48000 PE 27-Mar", "qty": "1 lot (15 units)", "approxPremium": "Rs.2700 total", "purpose": "Profits if index falls below 48000" }
       ],
-      "totalCost": "Rs.2700",
-      "maxProfit": "Rs.10000+",
-      "maxLoss": "Rs.2700",
-      "breakeven": "47820",
+      "totalCost": "Rs.2700", "maxProfit": "Rs.10000+", "maxLoss": "Rs.2700", "breakeven": "47820",
       "beginnerTip": "One practical tip for a beginner."
     },
     {
-      "name": "Short Strangle",
-      "type": "neutral",
-      "icon": "balance",
+      "name": "Short Strangle", "type": "neutral", "icon": "balance",
       "description": "Two sentences explaining this strategy.",
       "legs": [
-        {
-          "action": "SELL",
-          "instrument": "BANKNIFTY 49500 CE 27-Mar",
-          "qty": "1 lot (15 units)",
-          "approxPremium": "Rs.1200 credit",
-          "purpose": "Earns premium if index stays below 49500"
-        },
-        {
-          "action": "SELL",
-          "instrument": "BANKNIFTY 47000 PE 27-Mar",
-          "qty": "1 lot (15 units)",
-          "approxPremium": "Rs.900 credit",
-          "purpose": "Earns premium if index stays above 47000"
-        }
+        { "action": "SELL", "instrument": "BANKNIFTY 49500 CE 27-Mar", "qty": "1 lot (15 units)", "approxPremium": "Rs.1200 credit", "purpose": "Earns premium if index stays below 49500" },
+        { "action": "SELL", "instrument": "BANKNIFTY 47000 PE 27-Mar", "qty": "1 lot (15 units)", "approxPremium": "Rs.900 credit", "purpose": "Earns premium if index stays above 47000" }
       ],
-      "totalCost": "Net credit Rs.2100",
-      "maxProfit": "Rs.2100",
-      "maxLoss": "Unlimited",
-      "breakeven": "47000 to 49500",
+      "totalCost": "Net credit Rs.2100", "maxProfit": "Rs.2100", "maxLoss": "Unlimited", "breakeven": "47000 to 49500",
       "beginnerTip": "One practical caution for a beginner selling options."
     }
   ],
@@ -175,19 +254,11 @@ Return this exact JSON structure filled with realistic data for Indian markets:
 Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and costs realistically to fit the user's capital. Use Rs. prefix for money (not the rupee symbol).`;
 
     try {
-      const text = await callGemini(
-        [{ role: "user", content: userPrompt }],
-        systemPrompt
-      );
+      const text = await callGemini([{ role: "user", content: userPrompt }], systemPrompt);
       const data = extractJSON(text);
       setResult(data);
-      setChatMsgs([{
-        role: "ai",
-        text: `Strategy ready for ${data.parsed.instrument} with ${data.parsed.capitalFormatted}. Ask me anything — "which strategy should I pick?", "what is theta?", "how do I place this with my stockbroker?" etc.`
-      }]);
-    } catch (e) {
-      setError(e.message);
-    }
+      setChatMsgs([{ role: "ai", text: `Strategy ready for ${data.parsed.instrument} with ${data.parsed.capitalFormatted}. Ask me anything — "which strategy should I pick?", "what is theta?", "how do I place this with my stockbroker?" etc.` }]);
+    } catch (e) { setError(e.message); }
     setLoading(false);
   }
 
@@ -200,255 +271,428 @@ Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and cos
     try {
       const sys = `Expert Indian derivatives educator. Context: ${result?.parsed?.instrument}, ${result?.parsed?.capitalFormatted}. Plain English, beginner-friendly. Reference NSE, your stockbroker platform, lot sizes, Thursday expiry, SEBI. Under 80 words.`;
       const reply = await callGemini([{ role: "user", content: msg }], sys);
-      setChatMsgs(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = { role: "ai", text: reply };
-        return updated;
-      });
+      setChatMsgs(prev => { const u = [...prev]; u[u.length - 1] = { role: "ai", text: reply }; return u; });
     } catch (e) {
-      setChatMsgs(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = { role: "ai", text: "Error: " + e.message };
-        return updated;
-      });
+      setChatMsgs(prev => { const u = [...prev]; u[u.length - 1] = { role: "ai", text: "Error: " + e.message }; return u; });
     }
     setChatLoading(false);
   }
 
   const p = result?.parsed;
 
-  const S = {
-    shell: { display: "grid", gridTemplateColumns: "320px 1fr", minHeight: "100vh", fontFamily: "'Segoe UI', 'DM Sans', sans-serif", fontSize: 14, color: "#0f0e17" },
-    left: { background: "#0f0e17", color: "#fff", display: "flex", flexDirection: "column", padding: "28px 24px", position: "sticky", top: 0, height: "100vh", overflowY: "auto" },
-    right: { background: "#faf9f7", padding: "28px 36px", overflowY: "auto" },
-    card: { background: "#fff", border: "1px solid #e8e6f0", borderRadius: 12, marginBottom: 14, overflow: "hidden" },
-    label: { fontSize: 10, fontWeight: 700, letterSpacing: "1.2px", textTransform: "uppercase", color: "rgba(255,255,255,0.38)", marginBottom: 8 },
-    textarea: { width: "100%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 10, color: "#fff", fontSize: 20, fontWeight: 700, padding: "14px 16px", outline: "none", resize: "none", lineHeight: 1.4, fontFamily: "inherit" },
-    goldBtn: { width: "100%", padding: 13, background: "#c9a84c", color: "#0f0e17", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit" },
-    metricGrid: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 18 },
-    metricBox: { background: "#fff", border: "1px solid #e8e6f0", borderRadius: 10, padding: "13px 15px" },
-    metricLabel: { fontSize: 10, color: "#7c7a92", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 5 },
-    sectionHead: { fontSize: 19, fontWeight: 800, marginBottom: 4, marginTop: 4 },
-    sectionSub: { fontSize: 13, color: "#7c7a92", marginBottom: 14 },
-    th: { textAlign: "left", padding: "7px 10px", fontSize: 10, fontWeight: 700, color: "#7c7a92", textTransform: "uppercase", letterSpacing: "0.5px", background: "#f4f3f0", borderBottom: "1px solid #e8e6f0" },
-    td: { padding: "9px 10px", borderBottom: "1px solid #e8e6f0", verticalAlign: "top" },
-    tipBox: { background: "#fdf6e3", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 8, padding: "11px 14px", marginTop: 12 },
-    chatMsg: (role) => ({ padding: "10px 14px", borderRadius: 8, fontSize: 13, lineHeight: 1.65, maxWidth: "92%", alignSelf: role === "user" ? "flex-end" : "flex-start", background: role === "user" ? "#0f0e17" : "#f4f3f0", color: role === "user" ? "#fff" : "#0f0e17", border: role === "ai" ? "1px solid #e8e6f0" : "none" }),
-  };
+  /* ── shared style tokens ── */
+  const card = { background: "#fff", border: "1px solid #e8e6f0", borderRadius: 12, marginBottom: 14, overflow: "hidden" };
+  const th = { textAlign: "left", padding: "7px 10px", fontSize: 10, fontWeight: 700, color: "#7c7a92", textTransform: "uppercase", letterSpacing: "0.5px", background: "#f4f3f0", borderBottom: "1px solid #e8e6f0", whiteSpace: "nowrap" };
+  const td = { padding: isMobile ? "8px 8px" : "9px 10px", borderBottom: "1px solid #e8e6f0", verticalAlign: "top", fontSize: isMobile ? 11 : 12 };
 
+  /* ── metric grid: 2-col on mobile, 4-col on tablet+ ── */
+  const metricCols = isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)";
+
+  /* ── risk grid: 1-col mobile, 2-col tablet+ ── */
+  const riskCols = isMobile ? "1fr" : "1fr 1fr";
+
+  /* ── strategy footer: 3-col always but smaller on mobile ── */
+  const footerPad = isMobile ? "10px 12px" : "12px 16px";
+
+  /* ── right panel padding ── */
+  const rightPad = isMobile ? "16px 14px" : isTablet ? "22px 26px" : "28px 36px";
+
+  /* ── chat message style ── */
+  const chatMsg = (role) => ({
+    padding: "10px 14px", borderRadius: 8, fontSize: 13, lineHeight: 1.65,
+    maxWidth: isMobile ? "90%" : "85%",
+    alignSelf: role === "user" ? "flex-end" : "flex-start",
+    background: role === "user" ? "#0f0e17" : "#f4f3f0",
+    color: role === "user" ? "#fff" : "#0f0e17",
+    border: role === "ai" ? "1px solid #e8e6f0" : "none",
+    wordBreak: "break-word",
+  });
+
+  /* ════════════════════════════════════════════════════════ */
   return (
-    <div style={S.shell}>
+    <>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeSlideUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes drawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
 
-      {/* LEFT PANEL */}
-      <aside style={S.left}>
-        <div style={{ marginBottom: 26 }}>
-          <div style={{ fontSize: 26, fontWeight: 800 }}>Deriv<span style={{ color: "#c9a84c", fontStyle: "italic" }}>AI</span></div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.38)", marginTop: 3 }}>Indian Derivatives Strategy Builder</div>
+        * { box-sizing: border-box; }
+
+        .deriv-root {
+          display: flex;
+          flex-direction: row;
+          min-height: 100vh;
+          font-family: 'Segoe UI', 'DM Sans', sans-serif;
+          font-size: 14px;
+          color: #0f0e17;
+        }
+
+        /* ── Desktop sidebar ── */
+        .deriv-sidebar {
+          width: 300px;
+          min-width: 300px;
+          max-width: 300px;
+          position: sticky;
+          top: 0;
+          height: 100vh;
+          overflow-y: auto;
+          flex-shrink: 0;
+        }
+
+        /* ── Main content ── */
+        .deriv-main {
+          flex: 1;
+          min-width: 0;
+          overflow-y: auto;
+        }
+
+        /* ── Mobile top bar (hidden on desktop/tablet) ── */
+        .deriv-topbar {
+          display: none;
+        }
+
+        /* ── Mobile drawer backdrop ── */
+        .deriv-backdrop {
+          display: none;
+        }
+
+        /* ── Mobile drawer ── */
+        .deriv-drawer {
+          display: none;
+        }
+
+        /* ── Tablet layout ── */
+        @media (max-width: 1023px) and (min-width: 640px) {
+          .deriv-sidebar { width: 260px; min-width: 260px; max-width: 260px; }
+        }
+
+        /* ── Mobile layout ── */
+        @media (max-width: 639px) {
+          .deriv-root { flex-direction: column; }
+
+          .deriv-sidebar { display: none; }
+
+          .deriv-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #0f0e17;
+            color: #fff;
+            padding: 13px 16px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            flex-shrink: 0;
+          }
+
+          .deriv-backdrop {
+            display: block;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 98;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s;
+          }
+          .deriv-backdrop.open {
+            opacity: 1;
+            pointer-events: all;
+          }
+
+          .deriv-drawer {
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 99;
+            max-height: 92vh;
+            border-radius: 20px 20px 0 0;
+            overflow: hidden;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+          }
+          .deriv-drawer.open {
+            transform: translateY(0);
+          }
+
+          .deriv-main { flex: 1; }
+        }
+
+        /* ── Leg table: hide Purpose col on mobile ── */
+        @media (max-width: 639px) {
+          .leg-purpose { display: none; }
+        }
+
+        /* ── Scrollable table wrapper ── */
+        .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        /* ── Animated result blocks ── */
+        .result-block { animation: fadeSlideUp 0.35s ease both; }
+      `}</style>
+
+      <div className="deriv-root">
+
+        {/* ════ DESKTOP / TABLET SIDEBAR ════ */}
+        <aside className="deriv-sidebar">
+          <InputPanel
+            query={query} setQuery={setQuery}
+            generate={generate} loading={loading}
+            result={result} bp={bp}
+          />
+        </aside>
+
+        {/* ════ MOBILE TOP BAR ════ */}
+        <div className="deriv-topbar">
+          <div style={{ fontSize: 20, fontWeight: 800 }}>
+            Deriv<span style={{ color: "#c9a84c", fontStyle: "italic" }}>AI</span>
+          </div>
+          <button
+            onClick={() => setDrawerOpen(true)}
+            style={{
+              background: "#c9a84c", border: "none", borderRadius: 9,
+              color: "#0f0e17", fontWeight: 800, fontSize: 13,
+              padding: "8px 15px", cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            ⚡ Trade
+          </button>
         </div>
 
-        <div style={S.label}>What do you want to trade?</div>
-        <textarea
-          style={S.textarea}
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); generate(); } }}
-          placeholder="e.g. Bank Nifty 10000 rupees"
-          rows={3}
+        {/* ════ MOBILE BACKDROP ════ */}
+        <div
+          className={`deriv-backdrop${drawerOpen ? " open" : ""}`}
+          onClick={() => setDrawerOpen(false)}
         />
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0 18px" }}>
-          {EXAMPLES.map(ex => (
-            <button key={ex} onClick={() => setQuery(ex)} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: "5px 11px", fontSize: 11, color: "rgba(255,255,255,0.55)", cursor: "pointer", fontFamily: "inherit" }}>
-              {ex.replace(" rupees", "").replace("with ", "")}
-            </button>
-          ))}
-        </div>
-
-        <button onClick={generate} disabled={loading || !query.trim()} style={{ ...S.goldBtn, opacity: (loading || !query.trim()) ? 0.45 : 1, cursor: (loading || !query.trim()) ? "not-allowed" : "pointer" }}>
-          {loading ? "⏳ Analyzing..." : "⚡ Generate Strategy"}
-        </button>
-
-        {p && (
-          <div style={{ marginTop: 18, background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.28)", borderRadius: 10, padding: "12px 14px" }}>
-            {[["Instrument", p.instrument], ["Capital", p.capitalFormatted], ["Type", p.type], ["Exchange", p.exchange]].map(([k, v]) => (
-              <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12 }}>
-                <span style={{ color: "rgba(255,255,255,0.42)" }}>{k}</span>
-                <span style={{ color: "#c9a84c", fontWeight: 700 }}>{v}</span>
-              </div>
-            ))}
+        {/* ════ MOBILE DRAWER ════ */}
+        <div className={`deriv-drawer${drawerOpen ? " open" : ""}`}>
+          {/* Drag handle */}
+          <div style={{ background: "#0f0e17", paddingTop: 10, display: "flex", justifyContent: "center" }}>
+            <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.25)", borderRadius: 2 }} />
           </div>
-        )}
-
-        <div style={{ marginTop: "auto", paddingTop: 20, fontSize: 10, color: "rgba(255,255,255,0.24)", lineHeight: 1.6 }}>
-          ⚠️ Educational only. Not SEBI-registered advice. Options carry substantial risk. Consult a licensed advisor.
+          <InputPanel
+            query={query} setQuery={setQuery}
+            generate={generate} loading={loading}
+            result={result} bp="mobile"
+            onClose={() => setDrawerOpen(false)}
+          />
         </div>
-      </aside>
 
-      {/* RIGHT PANEL */}
-      <main style={S.right}>
+        {/* ════ MAIN CONTENT ════ */}
+        <main className="deriv-main" style={{ background: "#faf9f7", padding: rightPad }}>
 
-        {/* EMPTY */}
-        {!loading && !result && !error && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", textAlign: "center" }}>
-            <div style={{ width: 68, height: 68, background: "#fdf6e3", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, marginBottom: 16 }}>📊</div>
-            <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Tell me what you want to trade</div>
-            <div style={{ color: "#7c7a92", fontSize: 14, maxWidth: 340, lineHeight: 1.7 }}>
-              Type an instrument and capital on the left — like <strong>"Bank Nifty 10000 rupees"</strong> — and I'll build 3 complete strategies sized to your budget.
+          {/* ── Empty state ── */}
+          {!loading && !result && !error && (
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              justifyContent: "center", minHeight: isMobile ? "60vh" : "70vh",
+              textAlign: "center", padding: "0 16px",
+            }}>
+              <div style={{
+                width: isMobile ? 58 : 68, height: isMobile ? 58 : 68,
+                background: "#fdf6e3", borderRadius: "50%",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: isMobile ? 26 : 30, marginBottom: 16,
+              }}>📊</div>
+              <div style={{ fontSize: isMobile ? 18 : 22, fontWeight: 800, marginBottom: 8 }}>
+                Tell me what you want to trade
+              </div>
+              <div style={{ color: "#7c7a92", fontSize: 14, maxWidth: 340, lineHeight: 1.7 }}>
+                {isMobile
+                  ? <>Tap <strong>⚡ Trade</strong> above, type an instrument and capital — like <strong>"Bank Nifty 10000 rupees"</strong> — and I'll build 3 strategies.</>
+                  : <>Type an instrument and capital on the left — like <strong>"Bank Nifty 10000 rupees"</strong> — and I'll build 3 complete strategies sized to your budget.</>
+                }
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* LOADING */}
-        {loading && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", gap: 14, textAlign: "center" }}>
-            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-            <div style={{ width: 42, height: 42, border: "3px solid #e8e6f0", borderTopColor: "#c9a84c", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#7c7a92" }}>Building your strategy...</div>
-            <div style={{ fontSize: 13, color: "#aaa" }}>Parsing instrument · Sizing lots · Designing hedge layers</div>
-          </div>
-        )}
+          {/* ── Loading ── */}
+          {loading && (
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              justifyContent: "center", minHeight: isMobile ? "60vh" : "70vh",
+              gap: 14, textAlign: "center",
+            }}>
+              <div style={{
+                width: 42, height: 42, border: "3px solid #e8e6f0",
+                borderTopColor: "#c9a84c", borderRadius: "50%",
+                animation: "spin 0.8s linear infinite",
+              }} />
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#7c7a92" }}>Building your strategy...</div>
+              <div style={{ fontSize: 13, color: "#aaa" }}>Parsing instrument · Sizing lots · Designing hedge layers</div>
+            </div>
+          )}
 
-        {/* ERROR */}
-        {error && (
-          <div style={{ background: "#fef2f1", border: "1px solid #fca5a5", borderRadius: 10, padding: "16px 20px", color: "#b5261e", marginBottom: 16 }}>
-            <strong>Error:</strong> {error}
-            <div style={{ marginTop: 8, fontSize: 12, color: "#888" }}>Try again or rephrase your input.</div>
-          </div>
-        )}
+          {/* ── Error ── */}
+          {error && (
+            <div style={{
+              background: "#fef2f1", border: "1px solid #fca5a5", borderRadius: 10,
+              padding: "16px 20px", color: "#b5261e", marginBottom: 16,
+            }}>
+              <strong>Error:</strong> {error}
+              <div style={{ marginTop: 8, fontSize: 12, color: "#888" }}>Try again or rephrase your input.</div>
+            </div>
+          )}
 
-        {/* RESULT */}
-        {result && !loading && (() => {
-          const kl = result.keyLevels || {};
-          return (
-            <>
-              {/* METRICS */}
-              <div style={S.metricGrid}>
-                {[
-                  { label: "Instrument", val: p.instrument, color: "#1a5fb4", sub: p.type },
-                  { label: "Capital", val: p.capitalFormatted, color: "#c9a84c", sub: "available" },
-                  { label: "Support", val: kl.support || "—", color: "#1a7a4a", sub: "floor level" },
-                  { label: "Resistance", val: kl.resistance || "—", color: "#b5261e", sub: "ceiling level" },
-                ].map(m => (
-                  <div key={m.label} style={S.metricBox}>
-                    <div style={S.metricLabel}>{m.label}</div>
-                    <div style={{ fontSize: 17, fontWeight: 800, color: m.color }}>{m.val}</div>
-                    <div style={{ fontSize: 11, color: "#7c7a92", marginTop: 4 }}>{m.sub}</div>
-                  </div>
-                ))}
-              </div>
+          {/* ── Result ── */}
+          {result && !loading && (() => {
+            const kl = result.keyLevels || {};
+            return (
+              <div className="result-block">
 
-              {/* MARKET CONTEXT */}
-              <div style={{ background: "#fdf6e3", border: "1px solid rgba(201,168,76,0.28)", borderRadius: 10, padding: "13px 16px", marginBottom: 18 }}>
-                <div style={{ fontWeight: 700, fontSize: 12, color: "#c05c00", marginBottom: 4 }}>📈 Market Context</div>
-                <div style={{ fontSize: 13, color: "#2d2b3d", lineHeight: 1.7 }}>{result.marketContext}</div>
-              </div>
-
-              {/* STRATEGIES */}
-              <div style={S.sectionHead}>Recommended Strategies</div>
-              <div style={S.sectionSub}>3 approaches sized to your capital — pick one that matches your market view</div>
-
-              {(result.strategies || []).map((s, i) => {
-                const tc = TYPE_CONFIG[s.type] || TYPE_CONFIG.neutral;
-                return (
-                  <div key={i} style={S.card}>
-                    {/* Header */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: "1px solid #e8e6f0" }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 8, background: tc.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{tc.emoji}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 800, fontSize: 15 }}>{s.name}</div>
-                        <div style={{ fontSize: 11, color: "#7c7a92", marginTop: 1 }}>{tc.label}</div>
-                      </div>
-                      <span style={{ padding: "4px 11px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: tc.bg, color: tc.color }}>{tc.label}</span>
-                    </div>
-
-                    {/* Body */}
-                    <div style={{ padding: "15px 18px" }}>
-                      <div style={{ fontSize: 13, color: "#2d2b3d", lineHeight: 1.7, marginBottom: 14 }}>{s.description}</div>
-
-                      {/* Legs table */}
-                      <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                          <thead>
-                            <tr>
-                              {["Action", "Instrument", "Qty", "Premium", "Purpose"].map(h => <th key={h} style={S.th}>{h}</th>)}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(s.legs || []).map((leg, li) => (
-                              <tr key={li}>
-                                <td style={{ ...S.td, fontWeight: 800, color: leg.action === "BUY" ? "#1a7a4a" : "#b5261e" }}>{leg.action}</td>
-                                <td style={{ ...S.td, fontWeight: 600 }}>{leg.instrument}</td>
-                                <td style={S.td}>{leg.qty}</td>
-                                <td style={{ ...S.td, fontWeight: 600 }}>{leg.approxPremium}</td>
-                                <td style={{ ...S.td, color: "#7c7a92", fontSize: 11 }}>{leg.purpose}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* Tip */}
-                      <div style={S.tipBox}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#c05c00", marginBottom: 4 }}>💡 Beginner Tip</div>
-                        <div style={{ fontSize: 13, color: "#2d2b3d", lineHeight: 1.6 }}>{s.beginnerTip}</div>
-                      </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderTop: "1px solid #e8e6f0" }}>
-                      {[["Total Cost", s.totalCost, "#1a5fb4"], ["Max Profit", s.maxProfit, "#1a7a4a"], ["Max Loss", s.maxLoss, "#b5261e"]].map(([lbl, val, col], fi) => (
-                        <div key={lbl} style={{ padding: "12px 16px", borderRight: fi < 2 ? "1px solid #e8e6f0" : "none" }}>
-                          <div style={{ fontSize: 10, color: "#7c7a92", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>{lbl}</div>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: col }}>{val}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* RISK WARNINGS */}
-              <div style={{ ...S.sectionHead, marginTop: 8 }}>⚠️ Risk Warnings</div>
-              <div style={S.sectionSub}>Understand these before placing any trade</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 22 }}>
-                {(result.riskWarnings || []).map((r, i) => (
-                  <div key={i} style={{ background: "#fff", border: "1px solid #e8e6f0", borderRadius: 10, padding: 15 }}>
-                    <div style={{ fontWeight: 700, fontSize: 12, color: "#c05c00", marginBottom: 6 }}>⚡ {r.title}</div>
-                    <div style={{ fontSize: 12, color: "#7c7a92", lineHeight: 1.6 }}>{r.detail}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* CHAT */}
-              <div style={{ background: "#fff", border: "1px solid #e8e6f0", borderRadius: 12, overflow: "hidden" }}>
-                <div style={{ padding: "12px 18px", borderBottom: "1px solid #e8e6f0", fontWeight: 700, fontSize: 13 }}>
-                  💬 Ask anything about this strategy
-                </div>
-                <div ref={chatRef} style={{ padding: 14, display: "flex", flexDirection: "column", gap: 9, maxHeight: 260, overflowY: "auto" }}>
-                  {chatMsgs.map((m, i) => (
-                    <div key={i} style={S.chatMsg(m.role)}>
-                      {m.text === "..." ? <span style={{ color: "#aaa" }}>Thinking...</span> : m.text}
+                {/* Metrics */}
+                <div style={{ display: "grid", gridTemplateColumns: metricCols, gap: isMobile ? 8 : 10, marginBottom: 16 }}>
+                  {[
+                    { label: "Instrument", val: p.instrument, color: "#1a5fb4", sub: p.type },
+                    { label: "Capital", val: p.capitalFormatted, color: "#c9a84c", sub: "available" },
+                    { label: "Support", val: kl.support || "—", color: "#1a7a4a", sub: "floor level" },
+                    { label: "Resistance", val: kl.resistance || "—", color: "#b5261e", sub: "ceiling level" },
+                  ].map(m => (
+                    <div key={m.label} style={{ background: "#fff", border: "1px solid #e8e6f0", borderRadius: 10, padding: isMobile ? "11px 12px" : "13px 15px" }}>
+                      <div style={{ fontSize: 10, color: "#7c7a92", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{m.label}</div>
+                      <div style={{ fontSize: isMobile ? 15 : 17, fontWeight: 800, color: m.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.val}</div>
+                      <div style={{ fontSize: 11, color: "#7c7a92", marginTop: 3 }}>{m.sub}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{ display: "flex", gap: 8, padding: "11px 14px", borderTop: "1px solid #e8e6f0" }}>
-                  <textarea
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
-                    placeholder="Ask anything — e.g. which strategy should I pick?"
-                    rows={2}
-                    style={{ flex: 1, padding: "8px 13px", border: "1.5px solid #e8e6f0", borderRadius: 8, fontFamily: "inherit", fontSize: 13, outline: "none", resize: "none", color: "#0f0e17" }}
-                  />
-                  <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()} style={{ padding: "8px 16px", background: "#0f0e17", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: (chatLoading || !chatInput.trim()) ? "not-allowed" : "pointer", opacity: (chatLoading || !chatInput.trim()) ? 0.45 : 1, fontFamily: "inherit" }}>
-                    Send ↑
-                  </button>
+
+                {/* Market context */}
+                <div style={{ background: "#fdf6e3", border: "1px solid rgba(201,168,76,0.28)", borderRadius: 10, padding: "13px 16px", marginBottom: 18 }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: "#c05c00", marginBottom: 4 }}>📈 Market Context</div>
+                  <div style={{ fontSize: 13, color: "#2d2b3d", lineHeight: 1.7 }}>{result.marketContext}</div>
+                </div>
+
+                {/* Strategies heading */}
+                <div style={{ fontSize: isMobile ? 16 : 19, fontWeight: 800, marginBottom: 4 }}>Recommended Strategies</div>
+                <div style={{ fontSize: 13, color: "#7c7a92", marginBottom: 14 }}>3 approaches sized to your capital — pick one that matches your market view</div>
+
+                {/* Strategy cards */}
+                {(result.strategies || []).map((s, i) => {
+                  const tc = TYPE_CONFIG[s.type] || TYPE_CONFIG.neutral;
+                  return (
+                    <div key={i} style={card}>
+                      {/* Card header */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: isMobile ? "12px 14px" : "14px 18px", borderBottom: "1px solid #e8e6f0", flexWrap: "wrap" }}>
+                        <div style={{ width: 38, height: 38, borderRadius: 8, background: tc.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{tc.emoji}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 800, fontSize: isMobile ? 14 : 15 }}>{s.name}</div>
+                          <div style={{ fontSize: 11, color: "#7c7a92", marginTop: 1 }}>{tc.label}</div>
+                        </div>
+                        <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: tc.bg, color: tc.color, flexShrink: 0 }}>{tc.label}</span>
+                      </div>
+
+                      {/* Card body */}
+                      <div style={{ padding: isMobile ? "13px 14px" : "15px 18px" }}>
+                        <div style={{ fontSize: 13, color: "#2d2b3d", lineHeight: 1.7, marginBottom: 12 }}>{s.description}</div>
+
+                        {/* Legs table */}
+                        <div className="table-scroll">
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, minWidth: isMobile ? 280 : "auto" }}>
+                            <thead>
+                              <tr>
+                                <th style={th}>Action</th>
+                                <th style={th}>Instrument</th>
+                                <th style={th}>Qty</th>
+                                <th style={th}>Premium</th>
+                                <th style={{ ...th }} className="leg-purpose">Purpose</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(s.legs || []).map((leg, li) => (
+                                <tr key={li}>
+                                  <td style={{ ...td, fontWeight: 800, color: leg.action === "BUY" ? "#1a7a4a" : "#b5261e", whiteSpace: "nowrap" }}>{leg.action}</td>
+                                  <td style={{ ...td, fontWeight: 600, whiteSpace: "nowrap" }}>{leg.instrument}</td>
+                                  <td style={{ ...td, whiteSpace: "nowrap" }}>{leg.qty}</td>
+                                  <td style={{ ...td, fontWeight: 600, whiteSpace: "nowrap" }}>{leg.approxPremium}</td>
+                                  <td style={{ ...td, color: "#7c7a92" }} className="leg-purpose">{leg.purpose}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Tip */}
+                        <div style={{ background: "#fdf6e3", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 8, padding: "11px 14px", marginTop: 12 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#c05c00", marginBottom: 4 }}>💡 Beginner Tip</div>
+                          <div style={{ fontSize: 13, color: "#2d2b3d", lineHeight: 1.6 }}>{s.beginnerTip}</div>
+                        </div>
+                      </div>
+
+                      {/* Card footer */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", borderTop: "1px solid #e8e6f0" }}>
+                        {[["Total Cost", s.totalCost, "#1a5fb4"], ["Max Profit", s.maxProfit, "#1a7a4a"], ["Max Loss", s.maxLoss, "#b5261e"]].map(([lbl, val, col], fi) => (
+                          <div key={lbl} style={{ padding: footerPad, borderRight: fi < 2 ? "1px solid #e8e6f0" : "none" }}>
+                            <div style={{ fontSize: 10, color: "#7c7a92", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>{lbl}</div>
+                            <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: col, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{val}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Risk warnings */}
+                <div style={{ fontSize: isMobile ? 16 : 19, fontWeight: 800, marginBottom: 4, marginTop: 8 }}>⚠️ Risk Warnings</div>
+                <div style={{ fontSize: 13, color: "#7c7a92", marginBottom: 14 }}>Understand these before placing any trade</div>
+                <div style={{ display: "grid", gridTemplateColumns: riskCols, gap: 10, marginBottom: 22 }}>
+                  {(result.riskWarnings || []).map((r, ri) => (
+                    <div key={ri} style={{ background: "#fff", border: "1px solid #e8e6f0", borderRadius: 10, padding: isMobile ? 13 : 15 }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: "#c05c00", marginBottom: 6 }}>⚡ {r.title}</div>
+                      <div style={{ fontSize: 12, color: "#7c7a92", lineHeight: 1.6 }}>{r.detail}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Chat */}
+                <div style={{ background: "#fff", border: "1px solid #e8e6f0", borderRadius: 12, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 16px", borderBottom: "1px solid #e8e6f0", fontWeight: 700, fontSize: 13 }}>
+                    💬 Ask anything about this strategy
+                  </div>
+                  <div ref={chatRef} style={{ padding: 12, display: "flex", flexDirection: "column", gap: 9, maxHeight: isMobile ? 220 : 260, overflowY: "auto" }}>
+                    {chatMsgs.map((m, mi) => (
+                      <div key={mi} style={chatMsg(m.role)}>
+                        {m.text === "..." ? <span style={{ color: "#aaa" }}>Thinking...</span> : m.text}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, padding: isMobile ? "10px 12px" : "11px 14px", borderTop: "1px solid #e8e6f0" }}>
+                    <textarea
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                      placeholder="Ask anything — e.g. which strategy should I pick?"
+                      rows={isMobile ? 1 : 2}
+                      style={{
+                        flex: 1, minWidth: 0, padding: "8px 12px",
+                        border: "1.5px solid #e8e6f0", borderRadius: 8,
+                        fontFamily: "inherit", fontSize: 13, outline: "none",
+                        resize: "none", color: "#0f0e17",
+                      }}
+                    />
+                    <button
+                      onClick={sendChat}
+                      disabled={chatLoading || !chatInput.trim()}
+                      style={{
+                        padding: isMobile ? "8px 12px" : "8px 16px",
+                        background: "#0f0e17", color: "#fff", border: "none",
+                        borderRadius: 8, fontWeight: 700, fontSize: 13,
+                        cursor: (chatLoading || !chatInput.trim()) ? "not-allowed" : "pointer",
+                        opacity: (chatLoading || !chatInput.trim()) ? 0.45 : 1,
+                        fontFamily: "inherit", flexShrink: 0, whiteSpace: "nowrap",
+                      }}
+                    >
+                      {isMobile ? "↑" : "Send ↑"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </>
-          );
-        })()}
-      </main>
-    </div>
+            );
+          })()}
+        </main>
+      </div>
+    </>
   );
 }
