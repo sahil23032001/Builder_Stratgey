@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
-const API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
-const API = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+const API_KEY = process.env.REACT_APP_GROQ_API_KEY;
+const API = "https://api.groq.com/openai/v1/chat/completions";
 
 
 const EXAMPLES = [
@@ -20,21 +20,25 @@ const TYPE_CONFIG = {
 };
 
 async function callGemini(messages, system) {
-  const parts = [];
-  if (system) parts.push({ text: "SYSTEM: " + system + "\n\n" });
-  messages.forEach(m => parts.push({ text: (m.role === "user" ? "USER: " : "ASSISTANT: ") + m.content }));
+  const groqMessages = [];
+  if (system) groqMessages.push({ role: "system", content: system });
+  groqMessages.push(...messages);
 
   const res = await fetch(API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + API_KEY
+    },
     body: JSON.stringify({
-      contents: [{ role: "user", parts }],
-      generationConfig: { maxOutputTokens: 4000, temperature: 0.7 }
+      model: "llama-3.3-70b-versatile",
+      max_tokens: 4000,
+      messages: groqMessages
     }),
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-  return data.candidates[0].content.parts[0].text;
+  return data.choices[0].message.content;
 }
 
 function extractJSON(text) {
