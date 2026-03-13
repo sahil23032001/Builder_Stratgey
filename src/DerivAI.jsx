@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
-const API = "https://api.anthropic.com/v1/messages";
-const API_KEY = process.env.REACT_APP_ANTHROPIC_API_KEY;
+const API = "https://api.groq.com/openai/v1/chat/completions";
+const API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 
 const EXAMPLES = [
   "Bank Nifty 10000 rupees",
@@ -18,21 +18,29 @@ const TYPE_CONFIG = {
   neutral: { label: "Neutral / Income",    bg: "#fff3e0", color: "#c05c00", emoji: "⚖️" },
 };
 
-async function callClaude(messages, system) {
-  const body = { model: "claude-sonnet-4-20250514", max_tokens: 4000, messages };
-  if (system) body.system = system;
+async function callGroq(messages, system) {
+  const groqMessages = [];
+  if (system) groqMessages.push({ role: "system", content: system });
+  groqMessages.push(...messages);
+
   const res = await fetch(API, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": API_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-    body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${API_KEY}`
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      max_tokens: 4000,
+      messages: groqMessages
+    }),
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-  return data.content[0].text;
+  return data.choices[0].message.content;
 }
 
 function extractJSON(text) {
-  // Try to find JSON object in the response
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("No JSON found in response");
   return JSON.parse(match[0]);
@@ -105,7 +113,7 @@ Return this exact JSON structure filled with realistic data for Indian markets:
       "maxProfit": "Rs.6000",
       "maxLoss": "Rs.1500",
       "breakeven": "48600",
-      "beginnerTip": "One practical sentence for placing this trade on your stockbroker."
+      "beginnerTip": "One practical sentence for placing this trade with your stockbroker."
     },
     {
       "name": "Long Put",
@@ -166,7 +174,7 @@ Return this exact JSON structure filled with realistic data for Indian markets:
 Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and costs realistically to fit the user's capital. Use Rs. prefix for money (not the rupee symbol).`;
 
     try {
-      const text = await callClaude(
+      const text = await callGroq(
         [{ role: "user", content: userPrompt }],
         systemPrompt
       );
@@ -190,7 +198,7 @@ Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and cos
     setChatLoading(true);
     try {
       const sys = `Expert Indian derivatives educator. Context: ${result?.parsed?.instrument}, ${result?.parsed?.capitalFormatted}. Plain English, beginner-friendly. Reference NSE, your stockbroker platform, lot sizes, Thursday expiry, SEBI. Under 80 words.`;
-      const reply = await callClaude([{ role: "user", content: msg }], sys);
+      const reply = await callGroq([{ role: "user", content: msg }], sys);
       setChatMsgs(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: "ai", text: reply };
@@ -208,7 +216,6 @@ Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and cos
 
   const p = result?.parsed;
 
-  // Styles
   const S = {
     shell: { display: "grid", gridTemplateColumns: "320px 1fr", minHeight: "100vh", fontFamily: "'Segoe UI', 'DM Sans', sans-serif", fontSize: 14, color: "#0f0e17" },
     left: { background: "#0f0e17", color: "#fff", display: "flex", flexDirection: "column", padding: "28px 24px", position: "sticky", top: 0, height: "100vh", overflowY: "auto" },
@@ -231,7 +238,7 @@ Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and cos
   return (
     <div style={S.shell}>
 
-      {/* ── LEFT PANEL ── */}
+      {/* LEFT PANEL */}
       <aside style={S.left}>
         <div style={{ marginBottom: 26 }}>
           <div style={{ fontSize: 26, fontWeight: 800 }}>Deriv<span style={{ color: "#c9a84c", fontStyle: "italic" }}>AI</span></div>
@@ -251,7 +258,7 @@ Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and cos
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "12px 0 18px" }}>
           {EXAMPLES.map(ex => (
             <button key={ex} onClick={() => setQuery(ex)} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: "5px 11px", fontSize: 11, color: "rgba(255,255,255,0.55)", cursor: "pointer", fontFamily: "inherit" }}>
-              {ex.replace(" rupees","").replace("with ","")}
+              {ex.replace(" rupees", "").replace("with ", "")}
             </button>
           ))}
         </div>
@@ -276,7 +283,7 @@ Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and cos
         </div>
       </aside>
 
-      {/* ── RIGHT PANEL ── */}
+      {/* RIGHT PANEL */}
       <main style={S.right}>
 
         {/* EMPTY */}
@@ -362,7 +369,7 @@ Important: BANKNIFTY lot size = 15, NIFTY lot size = 50. Adjust premiums and cos
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                           <thead>
                             <tr>
-                              {["Action","Instrument","Qty","Premium","Purpose"].map(h => <th key={h} style={S.th}>{h}</th>)}
+                              {["Action", "Instrument", "Qty", "Premium", "Purpose"].map(h => <th key={h} style={S.th}>{h}</th>)}
                             </tr>
                           </thead>
                           <tbody>
