@@ -97,9 +97,7 @@ function buildStrikeContext(spotPrice, instrumentKey) {
    DETERMINISTIC BEP CALCULATOR
    Computed from actual leg data — never relies on AI math
 ═══════════════════════════════════════════════════════════ */
-function computeBEP(strategyName, legs) {
-  const name = (strategyName || "").toLowerCase();
-
+function computeBEP(_strategyName, legs) {
   function parseStrike(legInstrument = "") {
     const m = legInstrument.match(/(\d{4,6})\s*(CE|PE)/i);
     return m ? parseInt(m[1]) : null;
