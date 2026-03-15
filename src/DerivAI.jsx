@@ -5,7 +5,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 ═══════════════════════════════════════════════════════════ */
 const GROQ_API_KEY = process.env.REACT_APP_GROQ_API_KEY;
 const GROQ_API     = "https://api.groq.com/openai/v1/chat/completions";
-const CORS_PROXY   = "https://corsproxy.io/?";
 const CACHE_TTL    = 5 * 60 * 1000; // 5 min
 
 /* ═══════════════════════════════════════════════════════════
@@ -49,29 +48,28 @@ function detectInstrument(query = "") {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   SPOT PRICE — Yahoo Finance via corsproxy.io
+   SPOT PRICE — via /api/spot Vercel serverless → NSE India API
    Returns live (15-min delayed) index level, no API key needed
 ═══════════════════════════════════════════════════════════ */
 const _priceCache = {};
 
 async function fetchSpotPrice(instrumentKey) {
-  const inst = INSTRUMENTS[instrumentKey];
-  if (!inst) throw new Error(`Unknown instrument: ${instrumentKey}`);
+  if (!INSTRUMENTS[instrumentKey]) throw new Error(`Unknown instrument: ${instrumentKey}`);
 
   // Return cached value if still fresh
   const cached = _priceCache[instrumentKey];
   if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.price;
 
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${inst.symbol}?interval=1m&range=1d`;
-  const proxyUrl = `${CORS_PROXY}${encodeURIComponent(yahooUrl)}`;
-
-  const res = await fetch(proxyUrl, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`Yahoo Finance returned HTTP ${res.status}`);
+  // Calls our Vercel serverless function which proxies NSE India API
+  const res = await fetch(`/api/spot?instrument=${encodeURIComponent(instrumentKey)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
 
   const json  = await res.json();
-  const meta  = json?.chart?.result?.[0]?.meta;
-  const price = meta?.regularMarketPrice ?? meta?.previousClose;
-  if (!price) throw new Error("Could not parse price from Yahoo Finance");
+  const price = json?.price;
+  if (!price) throw new Error("Could not parse price from NSE");
 
   _priceCache[instrumentKey] = { price, ts: Date.now() };
   return price;
@@ -260,7 +258,7 @@ function SpotPriceBadge({ instrumentKey, onStrikeClick }) {
 
       {error && (
         <div style={{ fontSize: 11, color: "#e74c3c", lineHeight: 1.5 }}>
-          Fetch failed — check internet / corsproxy.io<br />
+          Fetch failed — NSE price unavailable<br />
           <span style={{ color: "rgba(255,255,255,0.25)", fontSize: 10 }}>{error}</span>
         </div>
       )}
