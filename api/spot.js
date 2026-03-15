@@ -2,7 +2,7 @@
 // Vercel serverless function — runs server-side, no CORS issues
 // URL: GET /api/spot?symbol=^NSEBANK
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Allow your frontend to call this
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
