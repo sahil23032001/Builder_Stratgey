@@ -170,7 +170,7 @@ async function callGroq(messages, system) {
   const res = await fetch(GROQ_API, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + GROQ_API_KEY },
-    body: JSON.stringify({ model: "llama-3.3-70b-versatile", max_tokens: 4000, messages: msgs }),
+    body: JSON.stringify({ model: "openai/gpt-oss-120b", max_tokens: 4000, messages: msgs }),
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
